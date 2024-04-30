@@ -14,7 +14,7 @@ pub fn build(b: *std.Build) void {
     // between Debug, ReleaseSafe, ReleaseFast, and ReleaseSmall. Here we do not
     // set a preferred release mode, allowing the user to decide how to optimize.
     const optimize = b.standardOptimizeOption(.{});
-
+    const zig_args = b.dependency("zig-args", .{});
     const exe = b.addExecutable(.{
         .name = "git-build",
         // In this case the main source file is merely a path, however, in more
@@ -23,10 +23,18 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .link_libc = true,
         .optimize = optimize,
+        .version = .{
+            .major = 0,
+            .minor = 1,
+            .patch = 0,
+            .build = "alpha",
+        },
     });
 
     exe.linkSystemLibrary2("libgit2", .{ .needed = true });
-    exe.addAnonymousModule("git", .{ .source_file = .{ .path = "git/lib.zig" } });
+    const git_mod = b.createModule(.{.root_source_file = .{ .path = "git/lib.zig" }});
+    exe.root_module.addImport("git", git_mod);
+    exe.root_module.addImport("args", zig_args.module("args"));
     exe.linkLibC();
     // This declares intent for the executable to be installed into the
     // standard location when the user invokes the "install" step (the default

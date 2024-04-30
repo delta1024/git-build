@@ -10,6 +10,7 @@ pub const Error = error{
     LibOpenError,
     LibShutdownError,
     RepoOpenError,
+    RepoDiscoverError,
 };
 pub const GitError = struct {
     message: []const u8,
@@ -62,3 +63,22 @@ pub fn repositoryOpen(path: []const u8) Error!Repository {
     else
         return error.RepoOpenError;
 }
+pub fn repositoryDiscover(start_path: []const u8, across_fs: bool, ceiling_dirs: ?[]const u8) Error!GitBuf {
+    var buff: git.git_buf = undefined;
+    try checkErr(error.RepoDiscoverError, git.git_repository_discover(
+        &buff,
+        @ptrCast(start_path),
+        @intCast(@intFromBool(across_fs)),
+        @ptrCast(ceiling_dirs),
+    ));
+    return .{ .buff = buff };
+}
+pub const GitBuf = struct {
+    buff: git.git_buf,
+    pub fn slice(self: *const GitBuf) []const u8 {
+        return self.buff.ptr[0 .. self.buff.size + 1];
+    }
+    pub fn destroy(self: *GitBuf) void {
+        git.git_buf_dispose(@ptrCast(&self.buff));
+    }
+};
