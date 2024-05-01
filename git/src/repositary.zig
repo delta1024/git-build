@@ -1,5 +1,6 @@
 const root = @import("root.zig");
 const Error = root.Error;
+const checkErr = @import("error.zig").checkErr;
 const Buf = root.Buf;
 const git = @cImport({
     @cInclude("git2.h");
@@ -20,12 +21,12 @@ pub const Repository = struct {
 pub fn discover(start_path: []const u8, across_fs: bool, ceiling_dirs: ?[]const u8) Error!Buf {
     var b: Buf = undefined;
     const result = git.git_repository_discover(&b.data, @ptrCast(start_path), @intCast(@intFromBool(across_fs)), @ptrCast(ceiling_dirs));
-    if (result != 0) return error.RepoHadErr;
+    try checkErr(result);
     return b;
 }
 pub fn open(path: []const u8) Error!Repository {
     var repo: Repository = undefined;
     const result = git.git_repository_open(@ptrCast(&repo.ptr), @ptrCast(path));
-    if (result != 0) return error.RepoHadErr;
+    try checkErr(result);
     return repo;
 }

@@ -9,7 +9,7 @@ pub const Buf = struct {
     const Self = @This();
     pub fn grow(self: *Self, target_size: usize) Error!void {
         const res = git.git_buf_grow(&self.data, target_size);
-        if (res == -1) return error.AllocationFailure;
+        if (res == -1) return error.AllocationError;
     }
     pub fn destroy(self: *Self) void {
         git.git_buf_dispose(&self.data);
