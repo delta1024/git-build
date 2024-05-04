@@ -34,6 +34,14 @@ pub fn build(b: *std.Build) void {
 
     exe.root_module.addImport("args", args_dep.module("args"));
     exe.root_module.addImport("git", git_dep.module("git"));
+    const app_mod = b.createModule(.{
+        .root_source_file = .{ .path = "src/root.zig" },
+        .imports = &[_]std.Build.Module.Import{.{
+            .name = "git",
+            .module = git_dep.module("git"),
+        }},
+    });
+    exe.root_module.addImport("lib", app_mod);
     exe.linkLibC();
     // This declares intent for the executable to be installed into the
     // standard location when the user invokes the "install" step (the default
