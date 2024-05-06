@@ -48,21 +48,7 @@ pub fn runArgs(gpa: Allocator, sub_args: SubArgs) !u8 {
         return error.WrongArg;
     }
     if (!git_repo_initalized) {
-        const writer = app.stdErrWriter();
-        const str =
-            \\ git directory is not initilized.
-            \\
-            \\ You can initalize a git repository by running:
-            \\     
-            \\     git init .
-            \\
-            \\ Or you can initialize the repository and build system by running
-            \\
-            \\     git build init --repo -d .
-            \\
-        ;
-        try writer.print("{s}", .{str});
-        return 0;
+        return app.warnNoGitRepo();
     }
     const abs_path = try std.fs.cwd().realpathAlloc(gpa, repo_starting_dir);
     defer gpa.free(abs_path);
@@ -88,7 +74,7 @@ pub fn runArgs(gpa: Allocator, sub_args: SubArgs) !u8 {
                 \\ build config already exists.
                 \\ to change a config option please use:
                 \\
-                \\ git build config value <new value>
+                \\ git build config <get|set|rm> value [new value]
                 \\
                 \\ to run build initalization again please add the [--force|-f] option to git build init
             , .{});

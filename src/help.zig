@@ -13,7 +13,8 @@ pub const Opts = struct {
         .usage_summary = "[subcommand]",
         .full_text =
         \\Sub Options:
-        \\       init
+        \\      init
+        \\      config
         ,
         .option_docs = .{
             .help = "print this help message",
@@ -25,6 +26,7 @@ pub const Opts = struct {
 };
 const Verb = union(enum) {
     init: void,
+    config: void,
 };
 
 const Iter = struct {
@@ -53,6 +55,9 @@ pub fn runArgs(gpa: Allocator, sub_args: SubArgs) !u8 {
     switch (sub_args.sub_opts.verb.?) {
         .init => {
             _ = @import("init.zig").printHelp() catch return 0;
+        },
+        .config => {
+            _ = @import("config.zig").printHelp() catch return 0;
         },
     }
     return 0;

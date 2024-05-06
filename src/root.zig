@@ -7,12 +7,17 @@ pub const Config = struct {
     pub fn destroy(self: *Config, gpa: Allocator) void {
         gpa.free(self.target);
         gpa.destroy(self);
-        self.* = undefined;
     }
 };
 
 pub inline fn stdErrWriter() std.fs.File.Writer {
     return std.io.getStdErr().writer();
+}
+pub inline fn stdOutWriter() std.fs.File.Writer {
+    return std.io.getStdOut().writer();
+}
+pub inline fn stdInReader() std.fs.File.Reader {
+    return std.io.getStdIn().reader();
 }
 pub fn printGitErr(writer: anytype) !void {
     const err = git.getLatestError();
@@ -29,6 +34,41 @@ pub fn gitDirectoryIsInitialized() !bool {
         },
     };
     unreachable;
+}
+pub fn getGitRepo(path: ?[]const u8) !git.Repository {
+    var buf = try git.repository.discover(path orelse ".", false, null);
+    defer buf.destroy();
+    return try git.repository.open(buf.slice());
+}
+pub fn warnNoGitRepo() !u8 {
+    const writer = stdErrWriter();
+    const str =
+        \\ git directory is not initilized.
+        \\
+        \\ You can initalize a git repository by running:
+        \\     
+        \\     git init .
+        \\
+        \\ Or you can initialize the repository and build system by running
+        \\
+        \\     git build init --repo -d .
+        \\
+    ;
+    try writer.print("{s}", .{str});
+    return 1;
+}
+pub fn warnNoConfig() !u8 {
+    const writer = stdErrWriter();
+    const str =
+        \\ build config does not exist.
+        \\
+        \\ you can create one by running 
+        \\
+        \\  git build init
+        \\
+    ;
+    try writer.print("{s}", .{str});
+    return 1;
 }
 pub fn configExists(repo: *git.Repository) bool {
     const git_conf = repo.config() catch {
@@ -55,6 +95,7 @@ pub const ConfigDoesNotExist = error{
 };
 pub fn getConfig(repo: *git.Repository, gpa: Allocator) (ConfigDoesNotExist || error{OutOfMemory})!*Config {
     const conf = try gpa.create(Config);
+    const conf_type = @typeInfo(Config).Struct;
     errdefer gpa.destroy(conf);
     const git_conf = repo.config() catch {
         printGitErr(stdErrWriter()) catch {};
@@ -66,13 +107,16 @@ pub fn getConfig(repo: *git.Repository, gpa: Allocator) (ConfigDoesNotExist || e
         return error.ConfigDoesNotExist;
     };
     defer conf_snapshot.deinit();
-    const target = conf_snapshot.getString("build.target") catch {
-        printGitErr(stdErrWriter()) catch {};
-        return error.ConfigDoesNotExist;
-    };
-    conf.* = .{
-        .target = try gpa.dupe(u8, target),
-    };
+    inline for (conf_type.fields) |field| {
+        const val = if (field.type == []u8)
+            try gpa.dupe(u8, conf_snapshot.getString("build." ++ field.name) catch {
+                printGitErr(stdErrWriter()) catch {};
+                return error.ConfigDoesNotExist;
+            })
+        else
+            return error.ConfigDoesNotExist;
+        @field(conf, field.name) = val;
+    }
     return conf;
 }
 pub const ConfigWriteError = error{
@@ -86,9 +130,12 @@ pub fn setConfig(repo: *git.Repository, config: *const Config) ConfigWriteError!
     defer git_conf.deinit();
     const conf_type_info = @typeInfo(Config).Struct;
     inline for (conf_type_info.fields) |field| {
-        git_conf.setString("build." ++ field.name, @field(config, field.name)) catch {
-            printGitErr(stdErrWriter()) catch {};
+        if (field.type == []u8)
+            git_conf.setString("build." ++ field.name, @field(config, field.name)) catch {
+                printGitErr(stdErrWriter()) catch {};
+                return error.ConfigWriteError;
+            }
+        else
             return error.ConfigWriteError;
-        };
     }
 }

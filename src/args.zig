@@ -62,6 +62,7 @@ pub const Iter = struct {
 };
 const init = @import("init.zig");
 const help = @import("help.zig");
+const config = @import("config.zig");
 pub fn SubProgramArgs(comptime T: type) type {
     return struct {
         global_options: *const Opts,
@@ -81,7 +82,14 @@ pub fn runArgs(args: *const Args, gpa: Allocator) !u8 {
         return printHelp();
 
     switch (args.verb.?) {
-        .config => return 0,
+        .config => {
+            var conf_args = try config.parseArgs(gpa, args.positionals);
+            defer conf_args.deinit();
+            return config.runArgs(gpa, .{
+                .global_options = &args.options,
+                .sub_opts = &conf_args,
+            });
+        },
         .help => |h| {
             var help_args = try help.parseArgs(gpa, args.positionals);
             defer help_args.deinit();
