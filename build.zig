@@ -14,7 +14,6 @@ pub fn build(b: *std.Build) void {
     // between Debug, ReleaseSafe, ReleaseFast, and ReleaseSmall. Here we do not
     // set a preferred release mode, allowing the user to decide how to optimize.
     const optimize = b.standardOptimizeOption(.{});
-    const args_dep = b.dependency("zig-args", .{});
     const git_dep = b.dependency("git", .{});
     const exe = b.addExecutable(.{
         .name = "git-build",
@@ -32,8 +31,10 @@ pub fn build(b: *std.Build) void {
         },
     });
 
-    exe.root_module.addImport("args", args_dep.module("args"));
     exe.root_module.addImport("git", git_dep.module("git"));
+    exe.root_module.addAnonymousImport("yazap", .{
+        .root_source_file = .{ .path = "libs/yazap/src/lib.zig" },
+    });
     const app_mod = b.createModule(.{
         .root_source_file = .{ .path = "src/root.zig" },
         .imports = &[_]std.Build.Module.Import{.{

@@ -15,13 +15,13 @@
     // Once all dependencies are fetched, `zig build` no longer requires
     // internet connectivity.
     .dependencies = .{
-        .@"zig-args" = .{
-            .url = "https://github.com/MasterQ32/zig-args/archive/adb65692a3e3e1d7ea00e4f865ef1b1718326573.tar.gz",
-            .hash = "1220e23828fcdbf6fdcd53b7cd422e041570bc52d65d4fb97ac76cd6fad6a88dccc1",
+        // .@"zig-args" = .{
+        //     .url = "https://github.com/MasterQ32/zig-args/archive/adb65692a3e3e1d7ea00e4f865ef1b1718326573.tar.gz",
+        //     .hash = "1220e23828fcdbf6fdcd53b7cd422e041570bc52d65d4fb97ac76cd6fad6a88dccc1",
+        // },
+        .git = .{
+            .path = "libs/git",
         },
-	.@"git" = .{
-	.path = "git",
-	}
     },
     .paths = .{
         // This makes *all* files, recursively, included in this package. It is generally
@@ -37,3 +37,4 @@
         //"README.md",
     },
 }
+// vim:set filetype=zig
