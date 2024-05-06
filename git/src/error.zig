@@ -43,6 +43,8 @@ pub const Error = error{
     NotSupported,
     ReadOnly,
     AllocationFailure,
+    GenericErr,
+    OpenableRepo,
 };
 pub fn checkErr(maybe_err: c_int) Error!void {
     return switch (maybe_err) {
@@ -76,6 +78,7 @@ pub fn checkErr(maybe_err: c_int) Error!void {
         git.GIT_EAPPLYFAIL => error.ApplyFail,
         git.GIT_EOWNER => error.Owner,
         git.GIT_TIMEOUT => error.TimeOut,
+
         else => {},
     };
 }
