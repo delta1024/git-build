@@ -2,112 +2,60 @@ const std = @import("std");
 const git = @import("git");
 const Allocator = std.mem.Allocator;
 const argParser = @import("args");
+const yazap = @import("yazap");
+const App = yazap.App;
+const Arg = yazap.Arg;
+const Command = yazap.Command;
+const ArgMatches = yazap.ArgMatches;
 
-const Error = error{
-    WrongArg,
-} || std.fs.File.Writer.Error || git.Error;
-pub fn GenHelpFn(comptime T: type, comptime name: ?[]const u8) fn () Error!u8 {
-    const C = struct {
-        pub fn write() Error!u8 {
-            const writer = std.io.getStdErr().writer();
-            try argParser.printHelp(T, "git-build" ++ if (name) |n| " " ++ n else "", writer);
-            return error.WrongArg;
+pub const ProgramOptions = struct {
+    src_dir: ?[]u8 = null,
+    cmd: Cmds = undefined,
+    pub const Cmds = union(enum) {
+        init: init.InitOpts,
+        config: config.ConfigOpts,
+        no_opt: void,
+    };
+    pub fn deinit(self: ProgramOptions, gpa: Allocator) void {
+        if (self.src_dir) |dir|
+            gpa.free(dir);
+        switch (self.cmd) {
+            .init => |i| i.deinit(gpa),
+            .config => |c| c.deinit(gpa),
+            .no_opt => unreachable,
         }
-    };
-    return C.write;
-}
-pub const printHelp = GenHelpFn(Opts, null);
-pub const Args = argParser.ParseArgsResult(Opts, Verbs);
-pub const Opts = struct {
-    src_dir: ?[]const u8 = null,
-    pub const meta = .{
-        .usage_summary = "<cmd>",
-        .full_text = std.fmt.comptimePrint(help_str, help_fmt_args),
-        .option_docs = .{
-            .src_dir = "override config src dir",
-        },
-    };
-};
-const help_str =
-    \\Commands:
-    \\  config {s: >3}{s} 
-    \\    init {s: >3}{s}
-    \\         {s: >3}{s}
-    \\    help {s: >3}{s}
-;
-const help_fmt_args = .{
-    " ",
-    "Edit a config option",
-    " ",
-    "Run project initialization script.",
-    " ",
-    "An optional path may be provided",
-    " ",
-    "Print this help",
-};
-pub const Verbs = union(enum) {
-    config: struct {},
-    init: init.Opts,
-    help: help.Opts,
-};
-pub const Iter = struct {
-    params: []const Slice,
-    idx: usize = 0,
-    pub const Slice = [:0]const u8;
-    pub fn next(self: *Iter) ?Slice {
-        if (self.idx == self.params.len) return null;
-        defer self.idx += 1;
-        return self.params[self.idx];
     }
 };
 const init = @import("init.zig");
-const help = @import("help.zig");
+pub const runInit = init.runArgs;
 const config = @import("config.zig");
-pub fn SubProgramArgs(comptime T: type) type {
-    return struct {
-        global_options: *const Opts,
-        sub_opts: *const T,
-    };
-}
-pub fn parseArgs(gpa: Allocator) !Args {
-    const args = argParser.parseWithVerbForCurrentProcess(Opts, Verbs, gpa, .print) catch {
-        _ = try printHelp();
-        unreachable;
-    };
-    return args;
-}
+pub const runConfig = config.runArgs;
 
-pub fn runArgs(args: *const Args, gpa: Allocator) !u8 {
-    if (args.verb == null)
-        return printHelp();
-
-    switch (args.verb.?) {
-        .config => {
-            var conf_args = try config.parseArgs(gpa, args.positionals);
-            defer conf_args.deinit();
-            return config.runArgs(gpa, .{
-                .global_options = &args.options,
-                .sub_opts = &conf_args,
-            });
-        },
-        .help => |h| {
-            var help_args = try help.parseArgs(gpa, args.positionals);
-            defer help_args.deinit();
-            help_args.options = h;
-            return help.runArgs(gpa, .{
-                .global_options = &args.options,
-                .sub_opts = &help_args,
-            });
-        },
-        .init => |i| {
-            var init_args = try init.parseArgs(gpa, args.positionals);
-            defer init_args.deinit();
-            init_args.options = i;
-            return init.runArgs(gpa, .{
-                .global_options = &args.options,
-                .sub_opts = &init_args,
-            });
-        },
+pub fn populateArgs(app: *App, gbuild: *Command) !void {
+    try gbuild.addArg(Arg.singleValueOption("src_dir", null, "override config src dir"));
+    var init_cmd = app.createCommand("init", "initalize a project build");
+    try init.populateArgs(&init_cmd);
+    try gbuild.addSubcommand(init_cmd);
+    var conf_cmd = app.createCommand("config", "modify a config value");
+    try config.populateArgs(app, &conf_cmd);
+    try gbuild.addSubcommand(conf_cmd);
+}
+pub fn parseArgs(gpa: Allocator, app: *App, matches: *const ArgMatches) !ProgramOptions {
+    var opts: ProgramOptions = .{};
+    if (matches.getSingleValue("src_dir")) |path| {
+        opts.src_dir = try gpa.dupe(u8, path);
     }
-    unreachable;
+    if (matches.subcommandMatches("init")) |ini_cmd| {
+        opts.cmd = .{ .init = init.parseArgs(gpa, app, &ini_cmd) catch |err| {
+            return err;
+        } };
+    } else if (matches.subcommandMatches("config")) |conf_cmd| {
+        opts.cmd = .{ .config = config.parseArgs(gpa, app, &conf_cmd) catch |err| {
+            return err;
+        } };
+    } else {
+        try app.displayHelp();
+        return error.WrongArg;
+    }
+    return opts;
 }

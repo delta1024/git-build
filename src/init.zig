@@ -1,43 +1,45 @@
 const std = @import("std");
 const Allocator = std.mem.Allocator;
-const argParser = @import("args");
 const args = @import("args.zig");
-const Iter = args.Iter;
-pub const SubArgs = args.SubProgramArgs(Args);
-pub const printHelp = args.GenHelpFn(Opts, "init");
 const git = @import("git");
 const app = @import("lib");
-pub const Args = argParser.ParseArgsResult(Opts, null);
-pub const Opts = struct {
+const yazap = @import("yazap");
+const Command = yazap.Command;
+const App = yazap.App;
+const ArgMatch = yazap.ArgMatches;
+const Arg = yazap.Arg;
+
+pub const InitOpts = struct {
     force: bool = false,
     repo: bool = false,
-    repo_dir: ?[]const u8 = null,
-    pub const shorthands = .{
-        .f = "force",
-        .d = "repo_dir",
-    };
-    pub const meta = .{
-        .usage_summary = "[options]",
-        .option_docs = .{
-            .force = "disregard already configured project",
-            .repo = "initalize git repository with project",
-            .repo_dir = "optional git repository path",
-        },
-    };
+    repo_dir: ?[]u8 = null,
+    pub fn deinit(self: InitOpts, gpa: Allocator) void {
+        if (self.repo_dir) |repo_dir|
+            gpa.free(repo_dir);
+    }
 };
-pub fn parseArgs(gpa: Allocator, params: []const [:0]const u8) !Args {
-    var iter = Iter{ .params = params };
-    const sub = argParser.parse(Opts, &iter, gpa, .print) catch {
-        _ = try printHelp();
-        unreachable;
+pub fn populateArgs(cmd: *Command) !void {
+    var arg: [3]Arg = .{
+        Arg.singleValueOption("repo_dir", 'D', "path to the directory to initilize"),
+        Arg.booleanOption("force", 'f', "disregard an already configured project."),
+        Arg.booleanOption("repo", null, "initalize git repository as well as project."),
     };
-    return sub;
+    try cmd.addArgs(&arg);
 }
-pub fn runArgs(gpa: Allocator, sub_args: SubArgs) !u8 {
+pub fn parseArgs(gpa: Allocator, prog_app: *App, matches: *const ArgMatch) !InitOpts {
+    _ = prog_app;
+    var opt = InitOpts{};
+    opt.repo = matches.containsArg("repo");
+    opt.force = matches.containsArg("force");
+    if (matches.getSingleValue("repo_dir")) |repo_dir|
+        opt.repo_dir = try gpa.dupe(u8, repo_dir);
+    return opt;
+}
+pub fn runArgs(gpa: Allocator, sub_args: InitOpts) !u8 {
     const git_repo_initalized = try app.gitDirectoryIsInitialized();
-    const init_repo = sub_args.sub_opts.options.repo;
-    const force = sub_args.sub_opts.options.force;
-    const repo_starting_dir = sub_args.sub_opts.options.repo_dir orelse ".";
+    const init_repo = sub_args.repo;
+    const force = sub_args.force;
+    const repo_starting_dir = sub_args.repo_dir orelse ".";
 
     if (!git_repo_initalized and init_repo) {
         return initalizeRepoAndProject(gpa, repo_starting_dir);
@@ -50,7 +52,13 @@ pub fn runArgs(gpa: Allocator, sub_args: SubArgs) !u8 {
     if (!git_repo_initalized) {
         return app.warnNoGitRepo();
     }
-    const abs_path = try std.fs.cwd().realpathAlloc(gpa, repo_starting_dir);
+    const abs_path = p: {
+        const path = try std.fs.cwd().realpathAlloc(gpa, repo_starting_dir);
+        var buf = std.ArrayList(u8).init(gpa);
+        buf.items = path;
+        buf.capacity = path.len;
+        break :p try buf.toOwnedSliceSentinel(0);
+    };
     defer gpa.free(abs_path);
     var repo = r: {
         var repo_path = git.repository.discover(abs_path, false, null) catch {
@@ -103,8 +111,7 @@ fn initializeProject(gpa: Allocator, repo: *git.Repository) !u8 {
     try writer.writeAll("please enter a target name: ");
     try buf.flush();
     try reader.streamUntilDelimiter(target.writer(), '\n', null);
-    try target.append(0);
-    conf.target = try target.toOwnedSlice();
+    conf.target = try target.toOwnedSliceSentinel(0);
     defer gpa.free(conf.target);
     try app.setConfig(repo, &conf);
     return 0;

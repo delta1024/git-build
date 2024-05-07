@@ -3,7 +3,7 @@ const Allocator = std.mem.Allocator;
 const git = @import("git");
 pub const Build = @import("Build.zig");
 pub const Config = struct {
-    target: []u8,
+    target: [:0]u8,
     pub fn destroy(self: *Config, gpa: Allocator) void {
         gpa.free(self.target);
         gpa.destroy(self);
@@ -108,13 +108,15 @@ pub fn getConfig(repo: *git.Repository, gpa: Allocator) (ConfigDoesNotExist || e
     };
     defer conf_snapshot.deinit();
     inline for (conf_type.fields) |field| {
-        const val = if (field.type == []u8)
-            try gpa.dupe(u8, conf_snapshot.getString("build." ++ field.name) catch {
+        const val = if (field.type == [:0]u8) v: {
+            const b = conf_snapshot.getString("build." ++ field.name) catch {
                 printGitErr(stdErrWriter()) catch {};
                 return error.ConfigDoesNotExist;
-            })
-        else
-            return error.ConfigDoesNotExist;
+            };
+
+            break :v try std.mem.concatWithSentinel(gpa, u8, &.{b}, 0);
+        } else return error.ConfigDoesNotExist;
+
         @field(conf, field.name) = val;
     }
     return conf;
@@ -130,7 +132,7 @@ pub fn setConfig(repo: *git.Repository, config: *const Config) ConfigWriteError!
     defer git_conf.deinit();
     const conf_type_info = @typeInfo(Config).Struct;
     inline for (conf_type_info.fields) |field| {
-        if (field.type == []u8)
+        if (field.type == [:0]u8)
             git_conf.setString("build." ++ field.name, @field(config, field.name)) catch {
                 printGitErr(stdErrWriter()) catch {};
                 return error.ConfigWriteError;
