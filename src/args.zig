@@ -9,20 +9,23 @@ const Command = yazap.Command;
 const ArgMatches = yazap.ArgMatches;
 
 pub const ProgramOptions = struct {
-    src_dir: ?[]u8 = null,
+    opts: Opts = .{},
     cmd: Cmds = undefined,
     pub const Cmds = union(enum) {
         init: init.InitOpts,
         config: config.ConfigOpts,
-        no_opt: void,
+    };
+    pub const Opts = struct {
+        src_dir: ?[]u8 = null,
+        pub fn deinit(self: Opts, gpa: Allocator) void {
+            if (self.src_dir) |f| gpa.free(f);
+        }
     };
     pub fn deinit(self: ProgramOptions, gpa: Allocator) void {
-        if (self.src_dir) |dir|
-            gpa.free(dir);
+        self.opts.deinit(gpa);
         switch (self.cmd) {
             .init => |i| i.deinit(gpa),
             .config => |c| c.deinit(gpa),
-            .no_opt => unreachable,
         }
     }
 };
@@ -40,10 +43,16 @@ pub fn populateArgs(app: *App, gbuild: *Command) !void {
     try config.populateArgs(app, &conf_cmd);
     try gbuild.addSubcommand(conf_cmd);
 }
+pub fn isValidCmd(str: [:0]const u8) bool {
+    return std.ComptimeStringMap(void, .{
+        .{ "config", {} },
+        .{ "init", {} },
+    }).has(str);
+}
 pub fn parseArgs(gpa: Allocator, app: *App, matches: *const ArgMatches) !ProgramOptions {
     var opts: ProgramOptions = .{};
     if (matches.getSingleValue("src_dir")) |path| {
-        opts.src_dir = try gpa.dupe(u8, path);
+        opts.opts.src_dir = try gpa.dupe(u8, path);
     }
     if (matches.subcommandMatches("init")) |ini_cmd| {
         opts.cmd = .{ .init = init.parseArgs(gpa, app, &ini_cmd) catch |err| {
