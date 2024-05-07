@@ -89,6 +89,9 @@ pub fn runArgs(gpa: Allocator, args: ConfigOpts) !u8 {
             if (mem.eql(u8, opts[0], "target")) {
                 gpa.free(config.target);
                 config.target = try std.mem.concatWithSentinel(gpa, u8, &.{opts[1]}, 0);
+            } else if (mem.eql(u8, opts[0], "src_dir")) {
+                if (config.src) |dir| gpa.free(dir);
+                config.src = try std.mem.concatWithSentinel(gpa, u8, &.{opts[1]}, 0);
             } else {
                 try app.stdErrWriter().print("{s} is not a valid config field", .{opts[0]});
                 return 1;
@@ -99,6 +102,11 @@ pub fn runArgs(gpa: Allocator, args: ConfigOpts) !u8 {
         .get => |field| {
             if (mem.eql(u8, field, "target")) {
                 try app.stdOutWriter().print("{s}: {s}\n", .{ field, config.target });
+            } else if (mem.eql(u8, field, "src_dir")) {
+                if (config.src) |dir|
+                    try app.stdOutWriter().print("{s}: {s}\n", .{ field, dir })
+                else
+                    try app.stdOutWriter().print("{s} is not set\n", .{field});
             } else {
                 try app.stdErrWriter().print("{s} is not a valid config field\n", .{field});
                 return 1;
@@ -106,13 +114,17 @@ pub fn runArgs(gpa: Allocator, args: ConfigOpts) !u8 {
             return 0;
         },
         .rm => |field| {
-            if (std.mem.eql(u8, field, "target")) {
+            if (mem.eql(u8, field, "target")) {
                 try app.stdErrWriter().writeAll("cannot remove 'target' option.\n");
                 return 1;
+            } else if (mem.eql(u8, field, "src_dir")) {
+                if (config.src) |dir| gpa.free(dir);
+                config.src = null;
             } else {
                 try app.stdErrWriter().print("{s} is not a valid config field\n", .{field});
                 return 1;
             }
+            try app.setConfig(&repo, config);
             return 0;
         },
     }

@@ -46,28 +46,28 @@ pub const OpenExtOptions = struct {
 pub fn openExt(open_repo: bool, path: ?[]const u8, flags: OpenExtOptions, ceiling_dirs: ?[]const u8) Error!Repository {
     var flag: ?git.git_repository_open_flag_t = null;
     if (flags.no_search) {
-        if (flag != null)
-            flag = flag.? | git.GIT_REPOSITORY_OPEN_NO_SEARCH
+        if (flag) |*f|
+            f.* |= git.GIT_REPOSITORY_OPEN_NO_SEARCH
         else
             flag = git.GIT_REPOSITORY_OPEN_NO_SEARCH;
     } else if (flags.cross_fs) {
-        if (flag != null)
-            flag = flag.? | git.GIT_REPOSITORY_OPEN_CROSS_FS
+        if (flag) |*f|
+            f.* |= git.GIT_REPOSITORY_OPEN_CROSS_FS
         else
             flag = git.GIT_REPOSITORY_OPEN_CROSS_FS;
     } else if (flags.open_bare) {
-        if (flag != null)
-            flag = flag.? | git.GIT_REPOSITORY_OPEN_BARE
+        if (flag) |*f|
+            f.* |= git.GIT_REPOSITORY_OPEN_BARE
         else
             flag = git.GIT_REPOSITORY_OPEN_BARE;
     } else if (flags.no_dotgit) {
-        if (flag != null)
-            flag = flag.? | git.GIT_REPOSITORY_OPEN_NO_DOTGIT
+        if (flag) |*f|
+            f.* |= git.GIT_REPOSITORY_OPEN_NO_DOTGIT
         else
             flag = git.GIT_REPOSITORY_OPEN_NO_DOTGIT;
     } else if (flags.from_env) {
-        if (flag != null)
-            flag = flag.? | git.GIT_REPOSITORY_OPEN_FROM_ENV
+        if (flag) |*f|
+            f.* |= git.GIT_REPOSITORY_OPEN_FROM_ENV
         else
             flag = git.GIT_REPOSITORY_OPEN_FROM_ENV;
     }

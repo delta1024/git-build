@@ -3,9 +3,11 @@ const Allocator = std.mem.Allocator;
 const git = @import("git");
 pub const Build = @import("Build.zig");
 pub const Config = struct {
-    target: [:0]u8,
+    target: [:0]u8 = undefined,
+    src: ?[:0]u8 = null,
     pub fn destroy(self: *Config, gpa: Allocator) void {
         gpa.free(self.target);
+        if (self.src) |d| gpa.free(d);
         gpa.destroy(self);
     }
 };
@@ -95,8 +97,8 @@ pub const ConfigDoesNotExist = error{
 };
 pub fn getConfig(repo: *git.Repository, gpa: Allocator) (ConfigDoesNotExist || error{OutOfMemory})!*Config {
     const conf = try gpa.create(Config);
-    const conf_type = @typeInfo(Config).Struct;
     errdefer gpa.destroy(conf);
+    const conf_type = @typeInfo(Config).Struct;
     const git_conf = repo.config() catch {
         printGitErr(stdErrWriter()) catch {};
         return error.ConfigDoesNotExist;
@@ -108,16 +110,31 @@ pub fn getConfig(repo: *git.Repository, gpa: Allocator) (ConfigDoesNotExist || e
     };
     defer conf_snapshot.deinit();
     inline for (conf_type.fields) |field| {
-        const val = if (field.type == [:0]u8) v: {
-            const b = conf_snapshot.getString("build." ++ field.name) catch {
-                printGitErr(stdErrWriter()) catch {};
-                return error.ConfigDoesNotExist;
-            };
+        switch (field.type) {
+            inline [:0]u8 => {
+                const b = conf_snapshot.getString("build." ++ field.name) catch {
+                    printGitErr(stdErrWriter()) catch {};
+                    return error.ConfigDoesNotExist;
+                };
 
-            break :v try std.mem.concatWithSentinel(gpa, u8, &.{b}, 0);
-        } else return error.ConfigDoesNotExist;
-
-        @field(conf, field.name) = val;
+                @field(conf, field.name) = try std.mem.concatWithSentinel(gpa, u8, &.{b}, 0);
+            },
+            inline ?[:0]u8 => b: {
+                const b = conf_snapshot.getString("build." ++ field.name) catch |e| switch (e) {
+                    error.NotFound => {
+                        @field(conf, field.name) = null;
+                        break :b;
+                    },
+                    else => |err| {
+                        std.debug.print("{s}\n", .{@errorName(err)});
+                        printGitErr(stdErrWriter()) catch {};
+                        return error.ConfigDoesNotExist;
+                    },
+                };
+                @field(conf, field.name) = try std.mem.concatWithSentinel(gpa, u8, &.{b}, 0);
+            },
+            else => return error.ConfigDoesNotExist,
+        }
     }
     return conf;
 }
@@ -132,12 +149,28 @@ pub fn setConfig(repo: *git.Repository, config: *const Config) ConfigWriteError!
     defer git_conf.deinit();
     const conf_type_info = @typeInfo(Config).Struct;
     inline for (conf_type_info.fields) |field| {
-        if (field.type == [:0]u8)
-            git_conf.setString("build." ++ field.name, @field(config, field.name)) catch {
+        switch (field.type) {
+            inline [:0]u8 => git_conf.setString("build." ++ field.name, @field(config, field.name)) catch {
                 printGitErr(stdErrWriter()) catch {};
                 return error.ConfigWriteError;
-            }
-        else
-            return error.ConfigWriteError;
+            },
+            inline ?[:0]u8 => {
+                if (@field(config, field.name) != null) {
+                    git_conf.setString("build." ++ field.name, @field(config, field.name).?) catch {
+                        printGitErr(stdErrWriter()) catch {};
+                        return error.ConfigWriteError;
+                    };
+                } else {
+                    git_conf.deleteEntry("build." ++ field.name) catch |e| switch (e) {
+                        error.NotFound => {},
+                        else => {
+                            printGitErr(stdErrWriter()) catch {};
+                            return error.ConfigWriteError;
+                        },
+                    };
+                }
+            },
+            else => return error.ConfigWriteError,
+        }
     }
 }

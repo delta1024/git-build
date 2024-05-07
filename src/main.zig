@@ -11,12 +11,22 @@ pub fn main() !u8 {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer std.debug.assert(gpa.deinit() == .ok);
     const allocator = gpa.allocator();
-    var app = App.init(allocator, "git-build", "A build system built aroud git");
+    var app = App.init(allocator, "git-build", "A build system built around git");
     defer app.deinit();
     const gbuild = app.rootCommand();
     try args.populateArgs(&app, gbuild);
     const matches = app.parseProcess() catch {
-        try app.displayHelp();
+        const cmd = app.process_args.?[1];
+        const check = std.ComptimeStringMap(void, .{
+            .{ "config", {} },
+            .{ "init", {} },
+        });
+        if (check.has(cmd)) {
+            _ = try app.parseFrom(&.{ cmd, "-h" });
+            try app.displaySubcommandHelp();
+        } else {
+            try app.displayHelp();
+        }
         return 1;
     };
     const options = args.parseArgs(allocator, &app, matches) catch |err| switch (err) {

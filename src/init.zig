@@ -22,7 +22,7 @@ pub fn populateArgs(cmd: *Command) !void {
     var arg: [3]Arg = .{
         Arg.singleValueOption("repo_dir", 'D', "path to the directory to initilize"),
         Arg.booleanOption("force", 'f', "disregard an already configured project."),
-        Arg.booleanOption("repo", null, "initalize git repository as well as project."),
+        Arg.booleanOption("repo", null, "initalize git repository as well as project. If -D is not supplied cwd is used."),
     };
     try cmd.addArgs(&arg);
 }
@@ -80,11 +80,15 @@ pub fn runArgs(gpa: Allocator, sub_args: InitOpts) !u8 {
             const writer = app.stdErrWriter();
             try writer.print(
                 \\ build config already exists.
+                \\
                 \\ to change a config option please use:
+                \\
                 \\
                 \\ git build config <get|set|rm> value [new value]
                 \\
-                \\ to run build initalization again please add the [--force|-f] option to git build init
+                \\
+                \\ to run build initalization again please add the [--force|-f] option 
+                \\
             , .{});
             return 1;
         }
@@ -105,7 +109,7 @@ fn initializeProject(gpa: Allocator, repo: *git.Repository) !u8 {
     var buf = std.io.bufferedWriter(stdout.writer());
     const writer = buf.writer();
     const reader = std.io.getStdIn().reader();
-    var conf: app.Config = undefined;
+    var conf: app.Config = .{};
     var target = std.ArrayList(u8).init(gpa);
     try writer.writeAll("Welcome to git build!\n");
     try writer.writeAll("please enter a target name: ");
@@ -113,6 +117,13 @@ fn initializeProject(gpa: Allocator, repo: *git.Repository) !u8 {
     try reader.streamUntilDelimiter(target.writer(), '\n', null);
     conf.target = try target.toOwnedSliceSentinel(0);
     defer gpa.free(conf.target);
+    try writer.writeAll("optional src dir (src): ");
+    try buf.flush();
+    try reader.streamUntilDelimiter(target.writer(), '\n', null);
+    if (target.items.len != 0) {
+        conf.src = try target.toOwnedSliceSentinel(0);
+    }
+    defer if (conf.src) |b| gpa.free(b);
     try app.setConfig(repo, &conf);
     return 0;
 }
