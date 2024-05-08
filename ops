@@ -1,1 +1,1 @@
-{"author":{"id":"d9913b13f0baf1e5a2e569dcfb4f051f36a18622975ba57a2d60822375c5ad05"},"ops":[{"type":1,"timestamp":1714439246,"nonce":"pgPqEXI/HjGFq/SsBecc4gTaVso=","title":"test bug","message":"","files":null}]}
+{"author":{"id":"d9913b13f0baf1e5a2e569dcfb4f051f36a18622975ba57a2d60822375c5ad05"},"ops":[{"type":8,"timestamp":1715204847,"nonce":"v6lf8kE+E6lo25ZMw6NErvmEH3s=","target":"8d7fd3c0e6d8e3a551ef30109855ded885002775e46c2fd23adaef215966e791","new_metadata":{"github-id":"I_kwDOL5BFuM6ISafA","github-url":"https://github.com/delta1024/git-build/issues/1"}}]}
