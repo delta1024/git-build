@@ -21,22 +21,36 @@ fn setupAppOptions(app: *App, gpa: Allocator) !args.ProgramOptions {
     };
     return args.parseArgs(gpa, &app, matches);
 }
+const Spec = @import("Build/Spec.zig");
 pub fn main() !u8 {
-    _ = try git.init();
-    defer _ = git.shutdown() catch {};
+    // _ = try git.init();
+    // defer _ = git.shutdown() catch {};
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer std.debug.assert(gpa.deinit() == .ok);
     const allocator = gpa.allocator();
-    var app = App.init(allocator, "git-build", "A build system built around git");
-    defer app.deinit();
-    const options = setupAppOptions(&app, allocator) catch |e| switch (e) {
-        error.WrongArg => return 1,
-        else => |err| return err,
-    };
-    defer options.deinit(allocator);
-    switch (options.cmd) {
-        .init => |init| return args.runInit(allocator, init),
-        .config => |conf| return args.runConfig(allocator, conf),
-    }
+    // var app = App.init(allocator, "git-build", "A build system built around git");
+    // defer app.deinit();
+    // const options = setupAppOptions(&app, allocator) catch |e| switch (e) {
+    //     error.WrongArg => return 1,
+    //     else => |err| return err,
+    // };
+    // defer options.deinit(allocator);
+    // switch (options.cmd) {
+    //     .init => |init| return args.runInit(allocator, init),
+    //     .config => |conf| return args.runConfig(allocator, conf),
+    // }
+    const spec_src =
+        \\target: hello
+        \\inputs: {
+        \\src/main.c hi.o, 
+        \\(hi.h bye.h), 
+        \\monky.o (monky.h),
+        \\}
+        \\cmd: gcc INPUTS -o TARGETS
+    ;
+    const spec = try Spec.parse(allocator, spec_src);
+    defer spec.destroy(allocator);
+    std.debug.print("{}\n", .{spec});
+
     return 0;
 }

@@ -23,7 +23,7 @@ inputs: {
 src/multi.c,
 src/multi2.c,
 (src/multi.h,
-src/multi.h),
+src/multi2.h),
 }
 cmd: gcc INPUTS -c -o TARGET
 ```
