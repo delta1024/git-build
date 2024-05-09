@@ -171,9 +171,9 @@ pub fn parse(gpa: Allocator, source: []const u8) Error!*Spec {
                     mode = .input;
                     continue;
                 }
-                const buff = try gpa.alloc(u8, in.len - 1);
+                const buff = try gpa.alloc(u8, in.len);
                 errdefer gpa.free(buff);
-                @memcpy(buff, in[0 .. in.len - 1]);
+                @memcpy(buff, in[0..in.len]);
                 try deps.append(buff);
             },
             .done => unreachable,
