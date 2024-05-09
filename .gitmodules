@@ -1,3 +1,6 @@
 [submodule "libs/yazap"]
 	path = libs/yazap
 	url = https://github.com/PrajwalCH/yazap
+[submodule "libs/git/libgit2"]
+	path = libs/git/libgit2
+	url = https://github.com/libgit2/libgit2.git
